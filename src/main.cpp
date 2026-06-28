@@ -7,7 +7,11 @@
 #include <ArduinoJson.h> // Required for parsing metadata payload
 
 // --- Current Firmware Version ---
-const String CURRENT_VERSION = "1.1.0";
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "0.0.0-dev" // Fallback for local manual builds
+#endif
+
+const String CURRENT_VERSION = String(FIRMWARE_VERSION);
 
 // --- Network Targets ---
 const char *ssid = "JioFiber-Saransh";
