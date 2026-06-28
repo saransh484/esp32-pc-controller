@@ -95,7 +95,7 @@ void check_for_updates()
       if (serverVersion != CURRENT_VERSION)
       {
         Serial.println("New firmware detected! Preparing download...");
-        sendPhoneNotification("📥 ESP32: Downloading new update v" + serverVersion + "...");
+        sendPhoneNotification("📥 ESP32: Downloading new update : " + serverVersion + "...");
 
         httpUpdate.rebootOnUpdate(false);
 
@@ -108,7 +108,7 @@ void check_for_updates()
 
         if (ret == HTTP_UPDATE_OK)
         {
-          sendPhoneNotification("🚀 Firmware updated to v" + serverVersion + " successfully! Rebooting...");
+          sendPhoneNotification("🚀 Firmware updated to : " + serverVersion + " successfully! Rebooting...");
           delay(2000);
           ESP.restart();
         }
