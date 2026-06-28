@@ -42,9 +42,16 @@ jobs:
         run: pip install --upgrade platformio
 
       # 2. Compile and inject the version tag into the firmware build environment dynamically
-      - name: Build PlatformIO Project with Version Macro
+      - name: Build PlatformIO Project
         run: |
           PLATFORMIO_BUILD_FLAGS='-DFIRMWARE_VERSION=\"${{ steps.tag_version.outputs.new_tag }}\"' pio run
+        env:
+          # Maps your encrypted GitHub secrets directly into environment variables for the Python parser script
+          WIFI_SSID: "JioFiber-Saransh"
+          WIFI_PASS: ${{ secrets.NEW_WIFI_PASS }}
+          MQTT_SERVER: "saransh.qzz.io"
+          MQTT_USER: "homelab"
+          MQTT_PASS: ${{ secrets.NEW_MQTT_PASS }}
 
       # 3. Restructure and stage the target workspace for Caddy deployment
       - name: Prepare Staging Folder for Server
