@@ -1,0 +1,73 @@
+name: ESP CI/CD with Auto-Versioning
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to allow the workflow to push Git tags back to the repo
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all tags needed to calculate the next version bump
+
+      # 1. Automatically calculate and create the next semantic Git tag (e.g., v1.0.0 -> v1.0.1)
+      - name: Bump Version and Push Git Tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch # Increments the third digit (v1.0.x) on every commit
+
+      - name: Cache PlatformIO Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      # 2. Compile and inject the version tag into the firmware build environment dynamically
+      - name: Build PlatformIO Project with Version Macro
+        run: |
+          PLATFORMIO_BUILD_FLAGS='-DFIRMWARE_VERSION=\"${{ steps.tag_version.outputs.new_tag }}\"' pio run
+
+      # 3. Restructure and stage the target workspace for Caddy deployment
+      - name: Prepare Staging Folder for Server
+        run: |
+          mkdir -p staging
+
+          # Copy and rename the generic firmware to its versioned tag (e.g. staging/v1.0.1.bin)
+          cp .pio/build/esp32dev/firmware.bin "staging/${{ steps.tag_version.outputs.new_tag }}.bin"
+
+          # Dynamically construct a matching firmware.json index manifest
+          echo '{' > staging/firmware.json
+          echo '  "version": "${{ steps.tag_version.outputs.new_tag }}",' >> staging/firmware.json
+          echo '  "url": "https://esp.saransh.qzz.io/${{ steps.tag_version.outputs.new_tag }}.bin"' >> staging/firmware.json
+          echo '}' >> staging/firmware.json
+
+      # 4. Upload your files to the server
+      - name: Deploy Staged Artifacts to GCP Server via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          port: 22
+          source: "staging/*"
+          target: "/var/www/esp32-firmware/firmware/"
+          strip_components: 1
