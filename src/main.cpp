@@ -80,14 +80,15 @@ void check_for_updates()
   if (httpCode == HTTP_CODE_OK)
   {
     String payload = http.getString();
-    StaticJsonDocument<384> doc;
+
+    // Fixed: Using the modern ArduinoJson v7 non-deprecated approach
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
 
     if (!error)
     {
       String serverVersion = doc["version"].as<String>();
       String downloadUrl = doc["url"].as<String>();
-      String expectedSHA = doc["sha256"].as<String>();
 
       Serial.printf("Local: %s, Server: %s\n", CURRENT_VERSION.c_str(), serverVersion.c_str());
 
@@ -96,11 +97,14 @@ void check_for_updates()
         Serial.println("New firmware detected! Preparing download...");
         sendPhoneNotification("📥 ESP32: Downloading new update v" + serverVersion + "...");
 
-        // Pass the explicit SHA-256 checksum to the update engine
-        httpUpdate.rebootOnUpdate(false); // Handle reboot manually to close handles safely
+        httpUpdate.rebootOnUpdate(false);
 
-        // Pass validation string to securely verify signature blocks
-        t_httpUpdate_return ret = httpUpdate.update(secureClient, downloadUrl, "");
+        // Fixed: Pass the basic auth header values directly into the client handling the download path
+        http.begin(secureClient, downloadUrl);
+        http.setAuthorization(ota_user, ota_pass);
+
+        // Fixed: Use the clean update variant that directly consumes the pre-configured HTTPClient context
+        t_httpUpdate_return ret = httpUpdate.update(http);
 
         if (ret == HTTP_UPDATE_OK)
         {
@@ -110,7 +114,7 @@ void check_for_updates()
         }
         else
         {
-          Serial.printf("Update failed: %s\n", httpUpdate.getLastErrorString().c_str());
+          Serial.printf("Update failed. Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
           sendPhoneNotification("❌ Firmware update failed: " + httpUpdate.getLastErrorString());
         }
       }
@@ -147,9 +151,40 @@ void callback(char *topic, byte *payload, unsigned int length)
 {
   String message = "";
   for (int i = 0; i < length; i++)
+  {
     message += (char)payload[i];
+  }
 
-  digitalWrite(TEST_PIN, LOW); // Placeholder toggle execution logic
+  Serial.print("Command [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(message);
+
+  if (message == "PRESS")
+  {
+    if (String(topic) == test_topic)
+    {
+      sendPhoneNotification("⚠️ Triggered: Test Action (Flash LED)");
+      // Simulates a button press execution on your GPIO 4 pin
+      digitalWrite(TEST_PIN, HIGH);
+      delay(500);
+      digitalWrite(TEST_PIN, LOW);
+    }
+    else if (String(topic) == power_topic)
+    {
+      sendPhoneNotification("🚀 Triggered: PC Power Button Pressed");
+      digitalWrite(POWER_PIN, HIGH);
+      delay(500);
+      digitalWrite(POWER_PIN, LOW);
+    }
+    else if (String(topic) == reset_topic)
+    {
+      sendPhoneNotification("🔄 Triggered: PC Reset Button Pressed");
+      digitalWrite(RESET_PIN, HIGH);
+      delay(500);
+      digitalWrite(RESET_PIN, LOW);
+    }
+  }
 }
 
 void reconnect()
