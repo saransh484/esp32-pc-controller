@@ -13,23 +13,23 @@
 
 const String CURRENT_VERSION = String(FIRMWARE_VERSION);
 
-// --- Network Targets ---
-const char *ssid = "***REMOVED***";
-const char *password = "***REMOVED***";
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASS;
+const char *mqtt_server = MQTT_SERVER;
+const char *mqtt_user = MQTT_USER;
+const char *mqtt_pass = MQTT_PASS;
+const char *ntfy_user = MQTT_USER;
+const char *ntfy_pass = MQTT_PASS;
+const char *ota_user = MQTT_USER;
+const char *ota_pass = MQTT_PASS;
 
-const char *mqtt_server = "saransh.qzz.io";
+// --- Network Targets ---
 const int mqtt_port = 1883;
-const char *mqtt_user = "homelab";
-const char *mqtt_pass = "***REMOVED***";
 
 const char *ntfy_url = "https://ntfy.saransh.qzz.io/PC-ON";
-const char *ntfy_user = "homelab";
-const char *ntfy_pass = "***REMOVED***";
 
 // --- Pull OTA Manifest Endpoint ---
 const char *manifest_url = "https://esp.saransh.qzz.io/firmware.json";
-const char *ota_user = "homelab";
-const char *ota_pass = "***REMOVED***";
 
 unsigned long lastOTACheck = 0;
 const unsigned long OTA_CHECK_INTERVAL = 3600000; // 1 hour
