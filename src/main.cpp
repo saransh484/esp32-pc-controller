@@ -4,11 +4,11 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <HTTPUpdate.h>
-#include <ArduinoJson.h> // Required for parsing metadata payload
+#include <ArduinoJson.h>
 
 // --- Current Firmware Version ---
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "0.0.0-dev" // Fallback for local manual builds
+#define FIRMWARE_VERSION "0.0.0-dev"
 #endif
 
 const String CURRENT_VERSION = String(FIRMWARE_VERSION);
@@ -23,12 +23,8 @@ const char *ntfy_pass = MQTT_PASS;
 const char *ota_user = MQTT_USER;
 const char *ota_pass = MQTT_PASS;
 
-// --- Network Targets ---
 const int mqtt_port = 1883;
-
 const char *ntfy_url = "https://ntfy.saransh.qzz.io/PC-ON";
-
-// --- Pull OTA Manifest Endpoint ---
 const char *manifest_url = "https://esp.saransh.qzz.io/firmware.json";
 
 unsigned long lastOTACheck = 0;
@@ -41,6 +37,7 @@ const int RESET_PIN = 13;
 const char *test_topic = "pc/control/test";
 const char *power_topic = "pc/control/power";
 const char *reset_topic = "pc/control/reset";
+const char *restart_topic = "pc/control/esp_restart"; // NEW: restarts the ESP32 itself
 const char *online_topic = "pc/control/online";
 
 WiFiClient espClient;
@@ -81,7 +78,6 @@ void check_for_updates()
   {
     String payload = http.getString();
 
-    // Fixed: Using the modern ArduinoJson v7 non-deprecated approach
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
 
@@ -99,11 +95,9 @@ void check_for_updates()
 
         httpUpdate.rebootOnUpdate(false);
 
-        // Fixed: Pass the basic auth header values directly into the client handling the download path
         http.begin(secureClient, downloadUrl);
         http.setAuthorization(ota_user, ota_pass);
 
-        // Fixed: Use the clean update variant that directly consumes the pre-configured HTTPClient context
         t_httpUpdate_return ret = httpUpdate.update(http);
 
         if (ret == HTTP_UPDATE_OK)
@@ -150,7 +144,7 @@ void setup_wifi()
 void callback(char *topic, byte *payload, unsigned int length)
 {
   String message = "";
-  for (int i = 0; i < length; i++)
+  for (unsigned int i = 0; i < length; i++)
   {
     message += (char)payload[i];
   }
@@ -165,7 +159,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     if (String(topic) == test_topic)
     {
       sendPhoneNotification("⚠️ Triggered: Test Action (Flash LED)");
-      // Simulates a button press execution on your GPIO 4 pin
       digitalWrite(TEST_PIN, HIGH);
       delay(500);
       digitalWrite(TEST_PIN, LOW);
@@ -184,6 +177,15 @@ void callback(char *topic, byte *payload, unsigned int length)
       delay(500);
       digitalWrite(RESET_PIN, LOW);
     }
+    else if (String(topic) == restart_topic)
+    {
+      // NEW: restarts the ESP32 itself, not the PC
+      sendPhoneNotification("♻️ ESP32 restart triggered via MQTT");
+      client.publish(online_topic, "restarting", true);
+      client.disconnect(); // clean disconnect avoids a stale "offline" LWT firing needlessly
+      delay(500);
+      ESP.restart();
+    }
   }
 }
 
@@ -194,8 +196,6 @@ void reconnect()
     String clientId = "ESP32CAM-PC-" + String(random(0, 0xffff), HEX);
     if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass, online_topic, 1, true, "offline"))
     {
-
-      // Publish exact runtime version string explicitly to MQTT online topic
       String statusPayload = "Firmware " + CURRENT_VERSION + " online";
       client.publish(online_topic, statusPayload.c_str(), true);
 
@@ -208,7 +208,12 @@ void reconnect()
       {
         sendPhoneNotification("🟢 ESP32 connected. Running version: " + CURRENT_VERSION);
       }
+
+      // FIX: previously only test_topic was subscribed, so power/reset/restart never arrived
       client.subscribe(test_topic);
+      client.subscribe(power_topic);
+      client.subscribe(reset_topic);
+      client.subscribe(restart_topic);
     }
     else
     {
@@ -228,7 +233,11 @@ void setup()
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
 
-  // Poll on immediate startup execution
+  // FIX: default keepalive (15s) is too short to survive the TLS+HTTP OTA check,
+  // which was causing the broker to fire the LWT ("offline") even though the device was alive.
+  client.setKeepAlive(60);
+  client.setSocketTimeout(10);
+
   check_for_updates();
 }
 
@@ -243,6 +252,8 @@ void loop()
   if (millis() - lastOTACheck >= OTA_CHECK_INTERVAL)
   {
     lastOTACheck = millis();
+    client.loop(); // flush anything pending before the blocking HTTP call
     check_for_updates();
+    client.loop(); // service a ping immediately after, before keepalive expires
   }
 }
