@@ -140,7 +140,7 @@ void setup_wifi()
   if (WiFi.status() != WL_CONNECTED)
   {
     powerOutageFlag = true;
-    delay(600000);
+    delay(240000);
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED)
       delay(500);
