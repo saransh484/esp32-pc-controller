@@ -4,7 +4,7 @@ A lightweight, automated system for remote infrastructure management using an ES
 
 ## System Architecture
 
-- **Hardware Interface:** ESP32-CAM platform utilizing GPIO 4 (Status indicator toggle), GPIO 12 (Host Power), and GPIO 13 (Host Reset).
+- **Hardware Interface:** ESP32 platform utilizing GPIO 4 (Status indicator toggle), GPIO 12 (Host Power), and GPIO 13 (Host Reset).
 - **Firmware Management:** Client-driven HTTP polling loop utilizing the Arduino `HTTPUpdate` and `ArduinoJson` libraries. Updates are validated via metadata payloads and pulled down.
 - **Telemetry & Control:** Asynchronous MQTT state machine for low-latency command execution and real-time operational status loops.
 - **Alerting Engine:** Event-driven notification handling routing critical telemetry vectors directly to mobile endpoints via self-hosted `ntfy` infrastructure.
